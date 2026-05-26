@@ -442,11 +442,11 @@ class AntiCheat {
    * ประเมินระดับความเสี่ยงจากคะแนนสะสม
    */
   _riskLevel() {
-    // ตรวจสอบทั้งคะแนนปกติและคะแนน AI ว่าฝั่งไหนมีความเสี่ยงสูงสุด
-    const maxScore = Math.max(this.suspicionScore, this.aiScore);
-    if (maxScore >= this.thresholds.cheating) return 'CHEATING';
-    if (maxScore >= this.thresholds.highRisk) return 'HIGH RISK';
-    if (maxScore >= this.thresholds.warning) return 'WARNING';
+    // นำคะแนนความเสี่ยงจากระบบและจาก AI มารวมกัน
+    const totalScore = this.suspicionScore + this.aiScore;
+    if (totalScore >= this.thresholds.cheating) return 'CHEATING';
+    if (totalScore >= this.thresholds.highRisk) return 'HIGH RISK';
+    if (totalScore >= this.thresholds.warning) return 'WARNING';
     return 'SAFE';
   }
 

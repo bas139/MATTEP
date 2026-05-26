@@ -79,7 +79,8 @@ function getScoreValue(s) {
     // รองรับทั้งโครงสร้าง Live และ Record ที่ส่งมาคนละชื่อ
     const sysScore = s.suspicionScore || s.antiCheat?.suspicionScore || s.antiCheatReport?.suspicionScore || 0;
     const aiScore = s.aiScore || s.antiCheat?.aiScore || s.antiCheatReport?.aiScore || 0;
-    return Math.round(Math.max(sysScore, aiScore));
+    // นำคะแนนระบบคุมสอบและ AI มารวมกัน (สูงสุด 100)
+    return Math.min(100, Math.round(sysScore + aiScore));
 }
 
 async function updateDashboard() {
@@ -351,11 +352,15 @@ function renderStudentList(students) {
                             <span class="w-1.5 h-1.5 bg-amber-500 rounded-full"></span>
                             กำลังสอบ
                         </span>`
-                        : `
+                        : (s.isForcedSubmit || (s.name && s.name.includes('ถูกบังคับส่ง')) ? `
+                        <span class="flex items-center gap-1 bg-rose-50 text-rose-600 border border-rose-200/30 text-[9px] px-2 py-0.5 rounded-full font-bold">
+                            <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path></svg>
+                            บังคับส่ง
+                        </span>` : `
                         <span class="flex items-center gap-1 bg-emerald-50 text-emerald-600 border border-emerald-200/30 text-[9px] px-2 py-0.5 rounded-full font-bold">
                             <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
                             ส่งแล้ว
-                        </span>`}
+                        </span>`)}
                 </div>
                 <div class="flex justify-between items-center w-full mt-2">
                     <div class="flex items-center gap-2">

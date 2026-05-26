@@ -1197,6 +1197,15 @@
 
       // 3. เริ่มเปิดกล้องและระบบ AI Anti-Cheat
       startCamera();
+
+      // ป้องกันการกดย้อนกลับ (Back button) ของเบราว์เซอร์
+      history.pushState(null, null, location.href);
+      window.addEventListener('popstate', function () {
+        history.pushState(null, null, location.href);
+      });
+      
+      // แจ้งเตือนเมื่อพยายามปิด หรือรีเฟรชหน้าเว็บ
+      window.onbeforeunload = function() { return "คุณกำลังทำข้อสอบอยู่ หากออกจากหน้านี้ข้อมูลอาจสูญหาย"; };
     }
 
     // ===== CAMERA INITIALIZATION =====
@@ -1501,6 +1510,19 @@
       if (tempAction) {
         if (tempAction === 'หลับตา (เผลอหลับ)') {
           actionText = tempAction; // ผ่านการนับเฟรมมาแล้ว ไม่ต้องรอซ้ำ
+        } else if (tempAction.includes('ชำเลืองตา') || tempAction.includes('เหลือบตา')) {
+          suspiciousActionFrames++;
+          actionText = tempAction;
+          
+          // หักคะแนนสะสมทวีคูณตามจำนวนวินาที (30 เฟรม = 1 วินาที)
+          if (suspiciousActionFrames === 30) {
+            triggerAIViolation(`ผู้สอบ${tempAction} (ต่อเนื่อง 1 วินาที)`, 5, 'aiDetection');
+          } else if (suspiciousActionFrames === 60) {
+            triggerAIViolation(`ผู้สอบ${tempAction} (ต่อเนื่อง 2 วินาที)`, 20, 'aiDetection');
+          } else if (suspiciousActionFrames >= 90 && suspiciousActionFrames % 30 === 0) {
+            const secs = suspiciousActionFrames / 30;
+            triggerAIViolation(`ผู้สอบ${tempAction} (ต่อเนื่อง ${secs} วินาที)`, 50, 'aiDetection');
+          }
         } else {
           suspiciousActionFrames++;
           // รอให้หันต่อเนื่องเกินกำหนด (ค่าเริ่มต้น 30 เฟรม ~ 1 วินาที) ค่อยแจ้งเตือน
@@ -1525,24 +1547,25 @@
       } else if (actionText) {
         showAIWarning(actionText);
         
-        // แยกคะแนนตามพฤติกรรม (ให้ suspiciousFaceMovement โดยรวมเป็น 0 เพื่อไม่บวกคะแนนหากแค่ยืดคอ)
-        let pts = window.Soer?.points?.suspiciousFaceMovement !== undefined ? window.Soer.points.suspiciousFaceMovement : 0;
-        
-        if (actionText === 'มีบุคคลอื่นอยู่ในกล้อง (พบหลายใบหน้า)') {
-          pts = window.Soer?.points?.multipleFacesDetected || 30;
-        } else if (actionText.includes('หันหน้าไปทางซ้าย') || actionText.includes('หันหน้าไปทางขวา')) {
-          pts = window.Soer?.points?.turnSide || 10;
-        } else if (actionText.includes('หันหน้าลงล่าง')) {
-          pts = window.Soer?.points?.lookDown || 10;
-        } else if (actionText.includes('หันหน้าขึ้นบน')) {
-          pts = window.Soer?.points?.lookUp || 5;
-        } else if (actionText.includes('หลับตา')) {
-          pts = window.Soer?.points?.eyesClosed || 5;
-        } else if (actionText.includes('ตา')) { // ชำเลืองตา หรือ เหลือบตา
-          pts = window.Soer?.points?.eyeMovement || 5;
+        // ไม่ต้องหักคะแนนซ้ำสำหรับชำเลืองตา/เหลือบตา เพราะจัดการตามจำนวนวินาทีไปแล้วด้านบน
+        if (!actionText.includes('ชำเลืองตา') && !actionText.includes('เหลือบตา')) {
+          // แยกคะแนนตามพฤติกรรม (ให้ suspiciousFaceMovement โดยรวมเป็น 0 เพื่อไม่บวกคะแนนหากแค่ยืดคอ)
+          let pts = window.Soer?.points?.suspiciousFaceMovement !== undefined ? window.Soer.points.suspiciousFaceMovement : 0;
+          
+          if (actionText === 'มีบุคคลอื่นอยู่ในกล้อง (พบหลายใบหน้า)') {
+            pts = window.Soer?.points?.multipleFacesDetected || 30;
+          } else if (actionText.includes('หันหน้าไปทางซ้าย') || actionText.includes('หันหน้าไปทางขวา')) {
+            pts = window.Soer?.points?.turnSide || 10;
+          } else if (actionText.includes('หันหน้าลงล่าง')) {
+            pts = window.Soer?.points?.lookDown || 10;
+          } else if (actionText.includes('หันหน้าขึ้นบน')) {
+            pts = window.Soer?.points?.lookUp || 5;
+          } else if (actionText.includes('หลับตา')) {
+            pts = window.Soer?.points?.eyesClosed || 5;
+          }
+          
+          triggerAIViolation(`ผู้สอบ${actionText}`, pts, 'aiDetection');
         }
-        
-        triggerAIViolation(`ผู้สอบ${actionText}`, pts, 'aiDetection');
         noFaceFrames = 0;
       } else {
         showAIWarning(null);
@@ -1896,11 +1919,18 @@
       // ตรวจสอบคะแนนความเสี่ยงเพื่อดำเนินการอัตโนมัติ
       const currentRisk = Math.round(acReport.suspicionScore || 0);
       const currentAiRisk = Math.round(acReport.aiScore || 0);
+      const totalRisk = currentRisk + currentAiRisk;
       
-      if (currentRisk >= 80 || currentAiRisk >= 80) {
-        doSubmit();
+      if (totalRisk >= 80) {
+        // บันทึกประวัติการโดนบังคับส่งลงใน Event Log
+        if (window.antiCheat && typeof window.antiCheat.addViolation === 'function') {
+          window.antiCheat.addViolation({ description: 'ถูกระบบบังคับส่งข้อสอบ (คะแนนรวมความเสี่ยงถึง 80)', points: 0, category: 'SYSTEM' });
+          try { acReport = processAntiCheatReport(window.antiCheat.getAnalysisReport()); } catch(e) {}
+        }
+        alert('🚨 ระบบตรวจพบพฤติกรรมทุจริตเกินขีดจำกัด (คะแนนรวมตั้งแต่ 80 คะแนนขึ้นไป)\nระบบจะบังคับส่งข้อสอบอัตโนมัติและยุติการสอบทันที!');
+        doSubmit(true);
         return;
-      } else if ((currentRisk >= 50 || currentAiRisk >= 50) && !hasWarnedThreshold) {
+      } else if (totalRisk >= 50 && !hasWarnedThreshold) {
         hasWarnedThreshold = true;
       }
 
@@ -2029,19 +2059,19 @@
       document.getElementById('confirmModal').classList.remove('open');
     }
 
-    async function doSubmit() {
+    async function doSubmit(isForced = false) {
       if (!enforcePcOnly()) return;
       if (hasSubmitted) return;
-      if (!validateStudentInfo(true)) {
+      if (!isForced && !validateStudentInfo(true)) {
         closeConfirm();
         return;
       }
       hasSubmitted = true;
       closeConfirm();
       clearInterval(timerInterval);
-      const name  = document.getElementById('studentName').value.trim();
-      const no    = document.getElementById('studentNo').value.trim();
-      const cls   = document.getElementById('studentClass').value.trim();
+      const name  = document.getElementById('studentName').value.trim() || 'ไม่ระบุชื่อ (ทุจริต/ถูกบังคับส่ง)';
+      const no    = document.getElementById('studentNo').value.trim() || '00';
+      const cls   = document.getElementById('studentClass').value.trim() || '-';
 
       let score = 0;
       const objAnswers = [];
@@ -2077,6 +2107,7 @@
       const record = {
         uid: sessionUID,
         name, studentNo: no, studentClass: cls,
+        isForcedSubmit: isForced,
         score, scoreMax: TOTAL_OBJECTIVE, objectiveAnswers: objAnswers, chosenAnswers,
         essays: {
           essay1: document.getElementById('essay1').value,
@@ -2099,6 +2130,7 @@
 
       let all = [];
       window.__mattepSubmitting = true;
+      window.onbeforeunload = null; // ปลดล็อกแจ้งเตือนเมื่อส่งข้อสอบสำเร็จเพื่อให้ไปหน้าถัดไปได้
       try {
         sessionStorage.setItem('examSubmission', JSON.stringify(record));
         all = JSON.parse(localStorage.getItem('mattepExamRecords') || '[]');
