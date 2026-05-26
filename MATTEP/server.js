@@ -8,6 +8,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import os from 'os';
+import http from 'http';
 
 // 1. ตั้งค่า Redis และ Message Queue (พักข้อมูลชั่วคราว ไม่ให้ฐานข้อมูลรับโหลดหนักไป)
 let redisConnection = null;
@@ -22,7 +23,11 @@ const EventPayloadSchema = z.object({
     timestamp: z.number().int().positive().refine(t => Math.abs(Date.now() - t) < 300000, { message: 'Timestamp too old' }) // ขยายเพดานเป็น 5 นาที (300,000ms)
 });
 
-const wss = new WebSocketServer({ port: 8080 });
+// ===== แก้ไข: รวมร่าง Express และ WebSocket ให้อยู่ในพอร์ตเดียวกัน =====
+const app = express();
+const server = http.createServer(app);
+const wss = new WebSocketServer({ server });
+// =====================================================================
 
 // 3. Rate Limiting State เก็บไว้ใน Memory เพื่อความเร็วในการตรวจจับ
 const rateLimits = new Map();
@@ -84,7 +89,6 @@ wss.on('connection', (ws, req) => {
             const validData = EventPayloadSchema.parse(parsedData);
 
             // 7. โยนเข้า Message Queue ทันที
-            // Worker อีกตัวจะมาหยิบข้อมูลนี้ไปเซฟลง MongoDB ทีหลัง ทำให้ Server ไม่ Block เลยแม้แต่นิดเดียว
             if (eventQueue && redisConnection && redisConnection.status === 'ready') {
                 eventQueue.add('process-event', validData, {
                     removeOnComplete: true,
@@ -118,12 +122,8 @@ wss.on('error', (err) => {
     console.error('[WebSocket Server Error]', err.message);
 });
 
-console.log('🚀 High-Concurrency Proctoring Server is running on ws://localhost:8080');
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-const app = express();
 
 // เปิดใช้งาน CORS ให้หน้าเว็บเรียกข้ามโดเมนได้
 app.use(cors());
@@ -254,18 +254,7 @@ app.get('/api/dashboard-data', async (req, res) => {
 });
 
 // เริ่มต้นเปิดเซิร์ฟเวอร์
-const PORT = 3000;
-app.listen(PORT, '0.0.0.0', () => {
-  const interfaces = os.networkInterfaces();
-  let networkIp = 'localhost';
-  for (const name of Object.keys(interfaces)) {
-    for (const iface of interfaces[name]) {
-      if (iface.family === 'IPv4' && !iface.internal) {
-        networkIp = iface.address;
-      }
-    }
-  }
-  console.log(`✅ ทดสอบบนเครื่องตัวเอง: http://localhost:${PORT}`);
-  console.log(`📱 ให้ผู้สอบ (มือถือ) เข้าผ่าน: http://${networkIp}:${PORT}`);
-  console.log(`📁 รอรับข้อสอบและบันทึกลงในโฟลเดอร์: /submissions`);
+const PORT = process.env.PORT || 3000; 
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 เซิร์ฟเวอร์ออนไลน์บน Render แล้วที่พอร์ต: ${PORT}`);
 });
