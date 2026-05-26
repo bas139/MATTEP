@@ -186,8 +186,7 @@ function analyzeAnomalies(students) {
         if (zTime < -2.5) { anomalyScore += 30; reasons.push(`ทำข้อสอบเร็วผิดปกติ (Z-Score: ${zTime.toFixed(2)})`); }
 
         const zGaze = ((report.statistics?.aiDetection || 0) - meanGaze) / stdGaze;
-        // เอาการเพิ่มคะแนนจากการหันหน้า/ชำเลืองตาออก (+0)
-        if (zGaze > 2.5) { anomalyScore += 0; reasons.push(`ความถี่การหันหน้าสูงกว่าเพื่อนในห้อง`); }
+        if (zGaze > 2.5) { anomalyScore += 10; reasons.push(`ความถี่การหันหน้าสูงกว่าเพื่อนในห้อง`); } // เพิ่มคะแนนความเสี่ยง
 
         if (anomalyScore > 0) {
             s.risk = Math.min(100, s.risk + anomalyScore);
@@ -456,9 +455,11 @@ function updateDetailView(students) {
     const stats = s.statistics || s.antiCheat?.statistics || s.antiCheatReport?.statistics || {};
     const sysScore = Math.round(s.suspicionScore || s.antiCheat?.suspicionScore || s.antiCheatReport?.suspicionScore || 0);
     const aiScore = Math.round(s.aiScore || s.antiCheat?.aiScore || s.antiCheatReport?.aiScore || 0);
+    const totalScore = Math.min(100, sysScore + aiScore);
     const statusItems = [
-        { label: 'ความเสี่ยงกล้อง AI', val: `${aiScore} คะแนน`, isWarn: aiScore > 0 },
-        { label: 'ความเสี่ยงระบบสอบ', val: `${sysScore} คะแนน`, isWarn: sysScore > 0 },
+        { label: 'คะแนนความเสี่ยงรวม', val: `${totalScore} คะแนน`, isWarn: totalScore > 0 },
+        { label: 'ความเสี่ยงจาก AI', val: `${aiScore} คะแนน`, isWarn: aiScore > 0 },
+        { label: 'ความเสี่ยงจากระบบ', val: `${sysScore} คะแนน`, isWarn: sysScore > 0 },
         { label: 'สลับหน้าจอ (Tab Switch)', val: stats.tabSwitch || 0 },
         { label: 'วางข้อความ (Paste)', val: stats.paste || 0 },
         { label: 'พยายามเปิด DevTools', val: stats.devtools || 0 },
@@ -494,8 +495,8 @@ function updateDetailView(students) {
 }
 
 // ฟังก์ชันสำหรับเปิดรูปหลักฐานด้วยหน้าต่าง Modal
-function showImageModal(imgSrc, desc, time) {
-    const modal = document.getElementById('evidenceModal');
+function showImageModal(imgSrc, desc, time) { // แก้ไขชื่อฟังก์ชันให้สอดคล้องกับที่เรียกใช้
+    const modal = document.getElementById('evidenceModal'); 
     const content = document.getElementById('modalContentBlock');
     
     document.getElementById('modalTitle').textContent = 'หลักฐานของการปฏิบัติตรงข้ามระเบียบ';
@@ -519,8 +520,8 @@ function showImageModal(imgSrc, desc, time) {
     }, 10);
 }
 
-function exportReport() { alert('ตอนนีมการส่งออกรายงาน PDF ยังคงกำลังอยู่ค่กนเดียว'); }
-function clearAllData() { if (confirm('บัคตอยตชกว่าส่งส่วนข้อมูลทังหมด')) { localStorage.clear(); location.reload(); } }
+function exportReport() { alert('ตอนนี้การส่งออกรายงาน PDF ยังคงอยู่ระหว่างการพัฒนา'); }
+function clearAllData() { if (confirm('คุณต้องการลบข้อมูลทั้งหมดใช่หรือไม่?')) { localStorage.clear(); location.reload(); } }
 function logout() { window.location.href = 'home.html'; }
 function filterStudents() { updateDashboard(); }
 

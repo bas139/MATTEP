@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="th">
 <head>
@@ -302,7 +303,7 @@
       </div>
 
       <div class="risk-strip">
-        <div class="risk-box risk-warning">
+        <div class="risk-box risk-warning" id="riskBox">
           <div class="r-lbl">Risk Score</div>
           <div class="r-val" id="acScore" style="color:#b45309">15</div>
           <div class="r-badge badge-warning" id="acLevel">WARNING</div>
@@ -372,33 +373,59 @@
       
       // 4. วิเคราะห์ Anti-Cheat
       const ac = sub.antiCheatReport || {};
-      const acScore = Math.round(ac.suspicionScore || 0);
-      const acLevel = ac.riskLevel || 'SAFE';
+      const acScore = sub.totalRiskScore !== undefined ? sub.totalRiskScore : Math.round(ac.suspicionScore || 0);
 
       const acScoreEl = document.getElementById('acScore');
-      acScoreEl.textContent = acScore;
+      const lvlEl = document.getElementById('acLevel');
+
+      // ฟังก์ชันแอนิเมชันตัวเลขวิ่งขึ้น
+      const animateValue = (obj, start, end, duration) => {
+        let startTimestamp = null;
+        const step = (timestamp) => {
+          if (!startTimestamp) startTimestamp = timestamp;
+          const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+          // Easing function (easeOut) เพื่อให้ความเร็วค่อยๆ ช้าลงตอนใกล้ถึงคะแนนจริง
+          const easeOut = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
+          obj.textContent = Math.floor(easeOut * (end - start) + start);
+          if (progress < 1) {
+            window.requestAnimationFrame(step);
+          } else {
+            obj.textContent = end;
+          }
+        };
+        window.requestAnimationFrame(step);
+      };
+
+      // เรียกใช้แอนิเมชันจาก 0 ไปถึงคะแนนจริง ในเวลา 1.5 วินาที (1500ms)
+      animateValue(acScoreEl, 0, acScore, 1500);
       document.getElementById('acCount').textContent = ac.violationCount || 0;
       document.getElementById('acRuntime').textContent = ac.runtime?.formatted || '0:00';
 
-      const lvlEl = document.getElementById('acLevel');
-      lvlEl.textContent = acLevel;
-
       // ปรับสีตามระดับความเสี่ยง
-      const riskClasses = {
-        'SAFE': { box: 'risk-safe', badge: 'badge-safe', color: '#15803d' },
-        'WARNING': { box: 'risk-warning', badge: 'badge-warning', color: '#b45309' },
-        'HIGH RISK': { box: 'risk-high', badge: 'badge-high', color: '#be123c' },
-        'CHEATING': { box: 'risk-critical', badge: 'badge-critical', color: '#991b1b' }
-      };
-
-      const style = riskClasses[acLevel] || riskClasses['SAFE'];
+      let boxClass, badgeClass, color;
+      if (acScore >= 80) {
+        lvlEl.textContent = "CHEATING";
+        boxClass = "risk-critical";
+        badgeClass = "badge-critical";
+        color = "#991b1b";
+      } else if (acScore >= 50) {
+        lvlEl.textContent = "SUSPICIOUS";
+        boxClass = "risk-warning";
+        badgeClass = "badge-warning";
+        color = "#b45309";
+      } else {
+        lvlEl.textContent = "NORMAL";
+        boxClass = "risk-safe";
+        badgeClass = "badge-safe";
+        color = "#15803d";
+      }
       
       // ใส่สีที่กล่อง Risk Boxes
       document.querySelectorAll('.risk-box').forEach(box => {
-        box.className = 'risk-box ' + style.box;
+        box.className = 'risk-box ' + boxClass;
       });
-      lvlEl.className = 'r-badge ' + style.badge;
-      acScoreEl.style.color = style.color;
+      lvlEl.className = 'r-badge ' + badgeClass;
+      acScoreEl.style.color = color;
 
       // 5. รายการเหตุการณ์ (Violations)
       const vioList = document.getElementById('vioList');

@@ -13,7 +13,7 @@ import http from 'http';
 // 1. ตั้งค่า Redis และ Message Queue (พักข้อมูลชั่วคราว ไม่ให้ฐานข้อมูลรับโหลดหนักไป)
 let redisConnection = null;
 let eventQueue = null;
-console.log('⚠️ [ระบบ] ข้ามการเชื่อมต่อ Redis เพื่อให้เซิร์ฟเวอร์ทำงานได้โดยไม่มี Error');
+// console.log('⚠️ [ระบบ] ข้ามการเชื่อมต่อ Redis เพื่อให้เซิร์ฟเวอร์ทำงานได้โดยไม่มี Error'); // หากต้องการใช้งาน Redis ให้เปิดบรรทัดนี้และตั้งค่าการเชื่อมต่อ
 
 // 2. Data Validation Schema ป้องกันคนเขียน Script ยิง API ปลอมเข้ามาป่วน
 const EventPayloadSchema = z.object({
@@ -223,7 +223,8 @@ app.post('/api/submit-exam', async (req, res) => {
     // เมื่อสอบเสร็จ ให้ลบออกจากระบบ Live ทันที
     liveStudents.delete(record.uid);
 
-    console.log(`[SUCCESS] รับข้อสอบจาก: ${record.name} (คะแนน: ${record.score}/${record.scoreMax}) | ทุจริต: ${record.suspicionScore} แต้ม`);
+    const totalCheatScore = record.totalRiskScore !== undefined ? record.totalRiskScore : Math.min(100, (record.suspicionScore || 0) + (record.aiScore || 0));
+    console.log(`[SUCCESS] รับข้อสอบจาก: ${record.name} (คะแนน: ${record.score}/${record.scoreMax}) | ความเสี่ยงทุจริตรวม: ${totalCheatScore} แต้ม (ระบบ ${record.suspicionScore || 0}, AI ${record.aiScore || 0})`);
     
     res.json({ success: true, message: 'ส่งข้อสอบสำเร็จ' });
   } catch (err) {

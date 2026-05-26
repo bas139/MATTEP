@@ -797,6 +797,7 @@
       <div class="banner-right">
         <div class="timer" id="timerDisplay">60:00</div>
         <div class="badge-row">
+          <div class="badge" id="liveRiskBadge" style="background: rgba(22, 163, 74, 0.8); border-color: rgba(255,255,255,0.4); transition: background 0.3s;">🛡️ Risk: 0</div>
           <div class="badge">📚 Web Technology</div>
           <div class="badge">10 ข้อ</div>
         </div>
@@ -1000,21 +1001,25 @@
       };
     }
 
+    // กำหนด URL ของ API อัตโนมัติ (รองรับกรณีเปิดผ่าน VSCode Live Server พอร์ต 5500)
+    const apiBase = window.location.port === '5500' ? `http://${window.location.hostname}:3000` : '';
+
     // 1. สร้างฟังก์ชันโหลด API ตอนเปิดหน้าเว็บ
     async function fetchExamFromAPI() {
       try {
-        const response = await fetch('/api/exam-config');
+        const response = await fetch(`${apiBase}/api/exam-config`);
         if (response.ok) {
            const EXAM_DATA = await response.json();
            dynamicAnswerKey = EXAM_DATA.map(q => q.correct);
            TOTAL_OBJECTIVE = EXAM_DATA.length;
         }
-
-        shuffleExam();  // เรียกสุ่มข้อสอบ
-        initExamSync(); // ผูกระบบบันทึกอัตโนมัติ
       } catch (err) {
         console.error("API Load Failed", err);
       }
+
+      // ย้ายคำสั่งออกมานอก try-catch เพื่อให้ตัวข้อสอบโหลดได้แม้ไม่มี Backend (Offline Mode)
+      shuffleExam();  
+      initExamSync(); 
     }
     
     fetchExamFromAPI(); // เริ่มดึงข้อสอบทันที
@@ -1026,7 +1031,9 @@
         // รองรับการใช้งานข้ามอุปกรณ์ด้วย IP จริงของเครื่องเซิร์ฟเวอร์
         const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsHost = window.location.hostname || 'localhost';
-        wsClient = new WebSocket(`${wsProtocol}//${wsHost}:8080`);
+        // ใช้ Port อัตโนมัติให้ตรงกับที่ Express รันอยู่ (ถ้าเป็น 5500 ให้ชี้ไป 3000)
+        const wsPort = window.location.port === '5500' ? '3000' : window.location.port;
+        wsClient = new WebSocket(`${wsProtocol}//${wsHost}${wsPort ? ':' + wsPort : ''}`);
         wsClient.onopen = () => {
           console.log('[WebSocket] Connected to server');
           updateConnectionStatus(true);
@@ -1095,7 +1102,7 @@
     });
 
     function showToast(message, severity = 'critical') {
-      return; // ปิดการแสดงแจ้งเตือนป๊อปอัป (Toast) และเสียงเตือนทั้งหมด
+      // return; // ปิดการแสดงแจ้งเตือนป๊อปอัป (Toast) และเสียงเตือนทั้งหมด
       const container = document.getElementById('toastContainer');
       if (!container) return;
       
@@ -1175,15 +1182,22 @@
       // 1. นำข้อมูลไปใส่ในฟอร์มข้อสอบหลักอัตโนมัติ และ Trigger Event ให้ระบบบันทึกความคืบหน้า
       const nameInput = document.getElementById('studentName');
       nameInput.value = name;
+      localStorage.setItem('mattep_saved_studentName', name);
       nameInput.dispatchEvent(new Event('input'));
 
       const classInput = document.getElementById('studentClass');
       classInput.value = studentClass;
+      localStorage.setItem('mattep_saved_studentClass', studentClass);
       classInput.dispatchEvent(new Event('input'));
 
       const noInput = document.getElementById('studentNo');
       noInput.value = studentNo;
+      localStorage.setItem('mattep_saved_studentNo', studentNo);
       noInput.dispatchEvent(new Event('input'));
+
+      // ปลดล็อกฟอร์มข้อสอบและอัปเดตความคืบหน้าทันที
+      if (typeof checkExamLock === 'function') checkExamLock();
+      if (typeof updateProgress === 'function') updateProgress();
 
       // ปลดล็อกระบบเสียง (AudioContext) หลังผู้ใช้กดปุ่ม เพื่อป้องกัน Browser Block เสียงแจ้งเตือน
       if (!globalAudioContext) {
@@ -1239,9 +1253,9 @@
         faceMeshModel = new FaceMesh({locateFile: (file) => {
           return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
         }});
-        
+
         faceMeshModel.setOptions({
-          maxNumFaces: 50, // ปรับให้จับใบหน้าได้สูงสุด 50 ใบหน้าพร้อมกัน (รับได้ทุกใบหน้าแน่นอน)
+          maxNumFaces: 2, // ปรับให้จับใบหน้าได้สูงสุด 2 ใบหน้า (ผู้สอบ 1 คน + ผู้บุกรุก 1 คน)
           refineLandmarks: true,
           minDetectionConfidence: 0.65, // เพิ่มเกณฑ์ความมั่นใจให้สูงขึ้น (65%) เพื่อลดการมองเห็นสิ่งของเป็นหน้าคน
           minTrackingConfidence: 0.65
@@ -1333,7 +1347,7 @@
     });
 
     function showAIWarning(text) {
-      return; // ปิดการแสดงข้อความเตือนสีแดงบนหน้าต่างกล้อง AI
+      // return; // ปิดการแสดงข้อความเตือนสีแดงบนหน้าต่างกล้อง AI
       const warningEl = document.getElementById('aiWarning');
       if (text) {
         warningEl.innerHTML = `
@@ -1515,16 +1529,16 @@
           actionText = tempAction;
           
           // หักคะแนนสะสมทวีคูณตามจำนวนวินาที (30 เฟรม = 1 วินาที)
-          if (suspiciousActionFrames === 30) {
-            triggerAIViolation(`ผู้สอบ${tempAction} (ต่อเนื่อง 1 วินาที)`, 5, 'aiDetection');
-          } else if (suspiciousActionFrames === 60) {
-            triggerAIViolation(`ผู้สอบ${tempAction} (ต่อเนื่อง 2 วินาที)`, 20, 'aiDetection');
-          } else if (suspiciousActionFrames >= 90 && suspiciousActionFrames % 30 === 0) {
+          if (suspiciousActionFrames === 30) { // 1 วินาที
+            triggerAIViolation(`ผู้สอบ${tempAction} (ต่อเนื่อง 1 วินาที)`, 5, 'aiDetection', 1000); // Cooldown 1 วินาที
+          } else if (suspiciousActionFrames === 60) { // 2 วินาที
+            triggerAIViolation(`ผู้สอบ${tempAction} (ต่อเนื่อง 2 วินาที)`, 20, 'aiDetection', 1000); // Cooldown 1 วินาที
+          } else if (suspiciousActionFrames >= 90 && suspiciousActionFrames % 30 === 0) { // 3 วินาทีขึ้นไป
             const secs = suspiciousActionFrames / 30;
-            triggerAIViolation(`ผู้สอบ${tempAction} (ต่อเนื่อง ${secs} วินาที)`, 50, 'aiDetection');
+            triggerAIViolation(`ผู้สอบ${tempAction} (ต่อเนื่อง ${secs} วินาที)`, 50, 'aiDetection', 1000); // Cooldown 1 วินาที
           }
         } else {
-          suspiciousActionFrames++;
+          suspiciousActionFrames++; // นับเฟรมต่อเนื่อง
           // รอให้หันต่อเนื่องเกินกำหนด (ค่าเริ่มต้น 30 เฟรม ~ 1 วินาที) ค่อยแจ้งเตือน
           if (suspiciousActionFrames > (window.Soer?.limits?.suspiciousFaceFramesThreshold || 30)) {
             actionText = tempAction;
@@ -1537,12 +1551,12 @@
       if (latestIsPhone) {
         showAIWarning('ห้ามใช้โทรศัพท์!');
         triggerAIViolation('AI ตรวจพบโทรศัพท์มือถือ', window.Soer?.points?.phoneDetected || 25, 'aiDetection');
-        noFaceFrames = 0;
+        noFaceFrames = 0; // รีเซ็ตตัวนับไม่พบใบหน้า
       } else if (faceCount === 0) {
         noFaceFrames++;
         if (noFaceFrames > (window.Soer?.limits?.noFaceFramesThreshold || 30)) {
           showAIWarning('ไม่พบใบหน้าผู้สอบ!');
-          triggerAIViolation('ไม่พบใบหน้าผู้สอบ', window.Soer?.points?.faceNotFound || 15, 'aiDetection');
+          triggerAIViolation('ไม่พบใบหน้าผู้สอบ', window.Soer?.points?.faceNotFound || 15, 'aiDetection', window.Soer?.timing?.faceNotFoundCooldownMs || 4000); // ใช้ Cooldown เฉพาะ
         }
       } else if (actionText) {
         showAIWarning(actionText);
@@ -1568,16 +1582,16 @@
         }
         noFaceFrames = 0;
       } else {
-        showAIWarning(null);
-        noFaceFrames = 0;
+        showAIWarning(null); // ซ่อนคำเตือนเมื่อกลับมาปกติ
+        noFaceFrames = 0; // รีเซ็ตตัวนับไม่พบใบหน้า
       }
     }
 
     // ฟังก์ชันถ่ายภาพจากกล้องเพื่อเก็บเป็นหลักฐาน
     function captureCameraSnapshot(includeMesh = false) {
       const video = document.getElementById('proctorCamera');
-      if (!video || video.readyState < 2) return null;
-      // เพิ่มความละเอียดเป็น 640x480 เพื่อให้ภาพชัดเจนขึ้น
+      if (!video || video.readyState < 2) return null; // ตรวจสอบว่าวิดีโอพร้อมใช้งาน
+      // กำหนดความละเอียดเป็น 640x480 เพื่อให้ภาพชัดเจนขึ้น
       const targetWidth = 640;
       const targetHeight = 480;
       const canvas = document.createElement('canvas');
@@ -1612,14 +1626,14 @@
       return canvas.toDataURL('image/jpeg', 0.7); // เพิ่มคุณภาพรูปเป็น 70%
     }
 
-    function triggerAIViolation(desc, points, category) {
+    function triggerAIViolation(desc, points, category, customCooldown = null) {
       const now = Date.now();
       
       // เรียกระยะเวลาหน่วง (Cooldown) แบบแยกตามพฤติกรรม
-      let cooldown = window.Soer?.timing?.aiAlertCooldownMs || 4000;
-      if (desc === 'ไม่พบใบหน้าผู้สอบ' && window.Soer?.timing?.faceNotFoundCooldownMs) {
-        cooldown = window.Soer.timing.faceNotFoundCooldownMs; // ใช้เวลาอนุโลมกรณีเข้าห้องน้ำ
-      }
+      // ใช้ customCooldown ถ้ามีการระบุมา หรือใช้ค่าเริ่มต้นจาก Soer.js
+      let cooldown = customCooldown !== null 
+                     ? customCooldown 
+                     : (window.Soer?.timing?.aiAlertCooldownMs || 4000);
 
       if (aiAlertCooldowns[desc] && now - aiAlertCooldowns[desc] < cooldown) return; 
       aiAlertCooldowns[desc] = now;
@@ -1713,7 +1727,7 @@
     });
 
     const ANSWER_KEY_PAYLOAD = 'WyJCIiwiQSIsIkEiLCJBIiwiQSIsIkEiLCJCIiwiQSJd';
-    const ANSWER_KEY_SALT = 'mattep-v4-local-signature';
+    const ANSWER_KEY_SALT = 'mattep-v4-local-signature'; // ต้องมีทั้งในหน้าเว็บและเซิร์ฟเวอร์เพื่อให้เข้ารหัสตรงกัน
 
     function getAnswerKey() {
       // ยกเลิกการใช้ Hardcode Base64 แล้วส่งค่าที่ดึงมาจาก API แทน
@@ -1919,8 +1933,21 @@
       // ตรวจสอบคะแนนความเสี่ยงเพื่อดำเนินการอัตโนมัติ
       const currentRisk = Math.round(acReport.suspicionScore || 0);
       const currentAiRisk = Math.round(acReport.aiScore || 0);
-      const totalRisk = currentRisk + currentAiRisk;
+      const totalRisk = Math.min(100, currentRisk + currentAiRisk); // จำกัดเพดานไว้ที่ 100
       
+      // แสดงคะแนนการโกงบนหน้าจอให้ผู้สอบเห็นแบบ Real-time
+      const riskBadge = document.getElementById('liveRiskBadge');
+      if (riskBadge) {
+        riskBadge.textContent = `🛡️ Risk: ${totalRisk}`;
+        if (totalRisk >= 80) {
+          riskBadge.style.background = 'rgba(220, 38, 38, 0.9)'; // สีแดงเตือนภัย
+        } else if (totalRisk >= 50) {
+          riskBadge.style.background = 'rgba(217, 119, 6, 0.9)'; // สีส้มเฝ้าระวัง
+        } else {
+          riskBadge.style.background = 'rgba(22, 163, 74, 0.8)'; // สีเขียวปลอดภัย
+        }
+      }
+
       if (totalRisk >= 80) {
         // บันทึกประวัติการโดนบังคับส่งลงใน Event Log
         if (window.antiCheat && typeof window.antiCheat.addViolation === 'function') {
@@ -1952,7 +1979,7 @@
       localStorage.setItem('mattep_live_sync_trigger', Date.now()); // ตัวกระตุ้นให้ Dashboard อัปเดต
 
       // ====== ส่งข้อมูล Live ไปยังเซิร์ฟเวอร์แบบ Real-time ======
-      fetch('/api/live-sync', {
+      fetch(`${apiBase}/api/live-sync`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(liveData)
@@ -2069,6 +2096,13 @@
       hasSubmitted = true;
       closeConfirm();
       clearInterval(timerInterval);
+      
+      // ปิดกล้องเว็บแคมเพื่อคืนทรัพยากรให้เครื่อง (Graceful Shutdown)
+      const video = document.getElementById('proctorCamera');
+      if (video && video.srcObject) {
+         video.srcObject.getTracks().forEach(track => track.stop());
+      }
+
       const name  = document.getElementById('studentName').value.trim() || 'ไม่ระบุชื่อ (ทุจริต/ถูกบังคับส่ง)';
       const no    = document.getElementById('studentNo').value.trim() || '00';
       const cls   = document.getElementById('studentClass').value.trim() || '-';
@@ -2103,6 +2137,10 @@
       if (window.antiCheat?.getAnalysisReport) {
         try { acReport = processAntiCheatReport(window.antiCheat.getAnalysisReport()); } catch(e) { console.error(e); }
       }
+      
+      const currentRisk = Math.round(acReport.suspicionScore || 0);
+      const currentAiRisk = Math.round(acReport.aiScore || 0);
+      const totalRisk = Math.min(100, currentRisk + currentAiRisk);
 
       const record = {
         uid: sessionUID,
@@ -2119,6 +2157,7 @@
         antiCheatReport: acReport,
         suspicionScore: acReport.suspicionScore,
         aiScore: acReport.aiScore,
+        totalRiskScore: totalRisk,
         riskLevel: acReport.riskLevel,
         violations: acReport.violations,
         violationCount: acReport.violationCount,
@@ -2139,7 +2178,7 @@
         localStorage.setItem('mattepExamRecords', JSON.stringify(all));
 
         // ====== ส่งข้อมูลไปยัง Backend Node.js ======
-        const response = await fetch('/api/submit-exam', {
+        const response = await fetch(`${apiBase}/api/submit-exam`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(record)

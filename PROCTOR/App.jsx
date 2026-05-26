@@ -81,6 +81,18 @@ export default function App() {
     return () => clearInterval(id);
   }, [isRunning]);
 
+  // เชื่อมต่อ WebSocket กับ Backend ที่พอร์ต 3000
+  const wsRef = useRef(null);
+  useEffect(() => {
+    const ws = new WebSocket('ws://localhost:3000');
+    ws.onopen = () => console.log('[PROCTOR] Connected to WS Server');
+    wsRef.current = ws;
+    return () => ws.close();
+  }, []);
+
+  // สร้าง UID แบบสุ่มให้ครบ 22 ตัวอักษรสำหรับเชื่อมโยงกับ Dashboard
+  const studentUid = useRef('stu-' + Math.random().toString(36).substr(2, 9) + Date.now().toString(36).substr(0, 9)).current.padEnd(22, 'x').substring(0, 22);
+
   const addAlert = useCallback((message, type, severity) => {
     let image = null;
     // บันทึกภาพเฉพาะตอนที่แจ้งเตือนระดับ "เฝ้าระวัง" (warn) หรือ "อันตราย" (danger)
@@ -161,16 +173,16 @@ export default function App() {
       // Face Mesh: รันทุกเฟรมเพื่อให้ราบรื่น
       if (faceMeshRef.current && !faceMeshBusyRef.current && typeof faceMeshRef.current.send === 'function') {
         faceMeshBusyRef.current = true;
-        faceMeshRef.current.send({ image: video })
-          .catch(err => console.debug('FaceMesh error:', err?.message || 'Unknown error'))
+        faceMeshRef.current.send({ image: video }) // ส่งภาพให้ FaceMesh ประมวลผล
+          .catch(err => console.error('FaceMesh error:', err?.message || 'Unknown error')) // เปลี่ยนเป็น console.error
           .finally(() => { faceMeshBusyRef.current = false; });
       }
       
       // Face Detection: ลดความถี่
       if (fc % FRAME_SKIP_FACE_DETECTION === 0 && faceDetectionRef.current && !faceDetectBusyRef.current && typeof faceDetectionRef.current.send === 'function') {
         faceDetectBusyRef.current = true;
-        faceDetectionRef.current.send({ image: video })
-          .catch(err => console.debug('FaceDetection error:', err?.message || 'Unknown error'))
+        faceDetectionRef.current.send({ image: video }) // ส่งภาพให้ FaceDetection ประมวลผล
+          .catch(err => console.error('FaceDetection error:', err?.message || 'Unknown error')) // เปลี่ยนเป็น console.error
           .finally(() => { faceDetectBusyRef.current = false; });
       }
       
@@ -189,7 +201,7 @@ export default function App() {
               addAlert('ตรวจพบวัตถุต้องสงสัย: ' + names, 'object', 'danger');
             }
           })
-          .catch(err => console.debug('COCO-SSD error:', err?.message || 'Unknown error'))
+          .catch(err => console.error('COCO-SSD error:', err?.message || 'Unknown error')) // เปลี่ยนเป็น console.error
           .finally(() => { cocoBusyRef.current = false; });
       }
       rafRef.current = requestAnimationFrame(runLoop);
@@ -323,6 +335,34 @@ export default function App() {
       addAlert('เกิดข้อผิดพลาด: ' + errorMsg, 'system', 'danger');
     }
   }, [initFaceMesh, initFaceDetection, runLoop, addAlert]);
+
+  // อัปเดตสถานะแบบ Live ไปยัง Backend เพื่อให้ Dashboard มองเห็น
+  useEffect(() => {
+    if (!isRunning) return;
+    const syncInterval = setInterval(() => {
+      const payload = {
+        uid: studentUid,
+        name: 'กล้อง AI Proctor (แอปแยก)',
+        no: 'AI',
+        class: 'Live',
+        risk: Math.min(100, (dangerCount * 15) + (totalAlerts * 5)),
+        suspicionScore: totalAlerts * 5,
+        aiScore: dangerCount * 15,
+        antiCheatReport: {
+          violations: alertsInternalRef.current.slice(0, 10),
+          statistics: { aiDetection: totalAlerts }
+        }
+      };
+
+      fetch('http://localhost:3000/api/live-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).catch(err => console.debug('[Live Sync] Failed:', err));
+    }, 3000);
+
+    return () => clearInterval(syncInterval);
+  }, [isRunning, dangerCount, totalAlerts, studentUid]);
 
   const stopProctoring = useCallback(() => {
     if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }

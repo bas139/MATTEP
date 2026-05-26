@@ -443,7 +443,7 @@ class AntiCheat {
    */
   _riskLevel() {
     // นำคะแนนความเสี่ยงจากระบบและจาก AI มารวมกัน
-    const totalScore = this.suspicionScore + this.aiScore;
+    const totalScore = Math.min(100, this.suspicionScore + this.aiScore);
     if (totalScore >= this.thresholds.cheating) return 'CHEATING';
     if (totalScore >= this.thresholds.highRisk) return 'HIGH RISK';
     if (totalScore >= this.thresholds.warning) return 'WARNING';
