@@ -1211,6 +1211,8 @@
       } catch (err) {
         console.error('ไม่สามารถเปิดกล้องได้:', err);
         label.textContent = '❌ Camera Error';
+        alert('คุณจำเป็นต้องอนุญาตให้ระบบเข้าถึงกล้องเพื่อใช้คุมสอบ AI ระบบจะนำคุณกลับสู่หน้าหลักทันที');
+        window.location.href = 'home.html';
       }
     }
 
