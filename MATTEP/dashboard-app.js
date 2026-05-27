@@ -5,6 +5,7 @@ let isInitialLoad = true; // สำหรับป้องกันการแ
 let updateScheduled = false; // ป้องกันการอัปเดต UI ซ้ำซ้อนในเฟรมเดียวกัน
 let isFetchingServer = false; // ป้องกันการอัปเดตซ้อนทับกัน
 let lastViolationCount = {}; // จำจำนวนการทำผิดล่าสุดเพื่อแจ้งเตือน
+let cachedStudents = []; // เก็บข้อมูลนักเรียนล่าสุดเพื่อให้ UI ตอบสนองทันทีเมื่อกดดูรายละเอียด
 
 // รายการโจทย์ข้อสอบ (ดึงมาจาก index.html)
 let EXAM_QUESTIONS = [];
@@ -163,6 +164,7 @@ async function updateDashboard() {
     });
 
     const allStudents = Array.from(studentMap.values());
+    cachedStudents = allStudents; // อัปเดตข้อมูลที่แคชไว้
 
     analyzeAnomalies(allStudents); // ประมวลผลพฤติกรรมผิดปกติด้วยสถิติ
     updateSummaryStats(allStudents);
@@ -409,7 +411,12 @@ function selectStudent(uid) {
     document.getElementById('dashboardView').classList.add('hidden-view');
     document.getElementById('studentDetailView').classList.remove('hidden-view');
     document.getElementById('backButton').classList.remove('hidden-view');
-    updateDashboard();
+    
+    // อัปเดตข้อมูลหน้าต่างรายละเอียดทันทีด้วยข้อมูลล่าสุด (แก้ปัญหากดแล้วไม่ไป/ไม่แสดงข้อมูล)
+    if (cachedStudents && cachedStudents.length > 0) {
+        updateDetailView(cachedStudents);
+        renderStudentList(cachedStudents); // อัปเดตแถบสีไฮไลท์ในหน้ารายชื่อทันที
+    }
 }
 
 function showDashboard() {
@@ -418,7 +425,11 @@ function showDashboard() {
     document.getElementById('studentDetailView').classList.add('hidden-view');
     document.getElementById('dashboardView').classList.remove('hidden-view');
     document.getElementById('backButton').classList.add('hidden-view');
-    updateDashboard();
+    
+    // เอาแถบสีไฮไลท์ออกทันที
+    if (cachedStudents && cachedStudents.length > 0) {
+        renderStudentList(cachedStudents); 
+    }
 }
 
 function updateDetailView(students) {
