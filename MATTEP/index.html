@@ -1235,7 +1235,17 @@
       } catch (err) {
         console.error('ไม่สามารถเปิดกล้องได้:', err);
         label.textContent = '❌ Camera Error';
-        alert('คุณจำเป็นต้องอนุญาตให้ระบบเข้าถึงกล้องเพื่อใช้คุมสอบ AI ระบบจะนำคุณกลับสู่หน้าหลักทันที');
+        alert('คุณจำเป็นต้องอนุญาตให้ระบบเข้าถึงกล้องเพื่อใช้คุมสอบ AI ระบบจะนำคุณกลับสู่หน้าหลักทันที\n\n(หากกดทำข้อสอบใหม่แล้วระบบไม่ถามอีกครั้ง ให้คลิกไอคอนแม่กุญแจ 🔒 ที่ช่อง URL ด้านบน แล้วเปลี่ยนเป็น "อนุญาต" เพื่อเปิดกล้อง)');
+        
+        window.onbeforeunload = null; // ปลดล็อกแจ้งเตือนเพื่อบังคับกลับหน้าหลักทันที
+        
+        // ล้างข้อมูลเซสชันเก่าเพื่อให้เริ่มใหม่ทั้งหมดเมื่อเข้าสู่ระบบอีกครั้ง
+        ['studentName', 'studentNo', 'studentClass', 'essay1', 'essay2'].forEach(id => {
+          localStorage.removeItem('mattep_saved_' + id);
+        });
+        localStorage.removeItem('mattep_timer_end');
+        for (let i = 1; i <= TOTAL_OBJECTIVE; i++) localStorage.removeItem('mattep_saved_q' + i);
+        
         window.location.href = 'home.html';
       }
     }
@@ -1676,6 +1686,49 @@
       e.preventDefault();
       showToast('ไม่อนุญาตให้ใช้เมนูคลิกขวาระหว่างการสอบ', 'warning');
     });
+
+    // ===== ระบบบังคับปิดและตรวจจับการเปิด DevTools (Anti-Debugging) =====
+    (function initAntiDevTools() {
+      function forceKick() {
+        window.onbeforeunload = null; // ปลดล็อกให้เตะออกได้ทันที
+        alert('ไม่อนุญาตให้เปิดใช้งานเครื่องมือนักพัฒนา (Developer Tools) หรือแถบด้านข้าง ระหว่างการสอบ!');
+        window.location.replace('home.html');
+      }
+
+      // 1. ตรวจจับด้วย Debugger Trap (ถ้าเปิด DevTools เบราว์เซอร์จะหยุดที่คำสั่ง debugger)
+      setInterval(function() {
+        const start = Date.now();
+        debugger;
+        if (Date.now() - start > 300) forceKick();
+      }, 1000);
+
+      // 2. ตรวจจับจากขนาดพื้นที่หน้าต่าง (กรณีเปิด DevTools แบบ Dock ฝังในหน้าจอ)
+      setInterval(function() {
+        if (window.outerWidth - window.innerWidth > 250 || window.outerHeight - window.innerHeight > 250) {
+          forceKick();
+        }
+      }, 1000);
+    })();
+
+    // ป้องกันการกดปุ่ม F12 และคีย์ลัด DevTools แบบสมบูรณ์
+    document.addEventListener('keydown', (e) => {
+      // ป้องกัน F12
+      if (e.key === 'F12' || e.keyCode === 123) {
+        e.preventDefault();
+        showToast('ไม่อนุญาตให้ใช้ปุ่ม F12 ระหว่างการสอบ', 'critical');
+      }
+      // ป้องกัน Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+Shift+C (เปิด DevTools)
+      if (e.ctrlKey && e.shiftKey && ['I', 'J', 'C', 'i', 'j', 'c'].includes(e.key)) {
+        e.preventDefault();
+        showToast('ไม่อนุญาตให้ใช้เครื่องมือนักพัฒนาระหว่างการสอบ', 'critical');
+      }
+      // ป้องกัน Ctrl+U (ดู Source Code)
+      if (e.ctrlKey && (e.key === 'U' || e.key === 'u')) {
+        e.preventDefault();
+        showToast('ไม่อนุญาตให้ดู Source Code ระหว่างการสอบ', 'critical');
+      }
+    });
+
     // ป้องกันการคลุมดำข้อความ (ยกเว้นช่องกรอกคำตอบ)
     document.addEventListener('selectstart', (e) => {
       const tag = e.target.tagName?.toLowerCase();
