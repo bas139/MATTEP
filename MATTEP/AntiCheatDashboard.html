@@ -508,7 +508,12 @@
                         if (key.startsWith('mattep_live_user_')) {
                             try {
                                 const data = JSON.parse(localStorage.getItem(key));
-                                if (data.uid === selectedStudentUID) {
+                                const no = data.studentNo || data.no || '';
+                                let uniqueId = data.uid;
+                                if (data.uid && no && !String(data.uid).endsWith(`_${no}`)) {
+                                    uniqueId = `${data.uid}_${no}`;
+                                }
+                                if (uniqueId === selectedStudentUID || data.uid === selectedStudentUID) {
                                     answersToDisplay = data.objectiveAnswers;
                                     break;
                                 }
@@ -521,7 +526,14 @@
                         try {
                             const records = JSON.parse(localStorage.getItem('mattepExamRecords') || '[]');
                             // รองรับทั้งแบบมี uid และแบบเก่า (fallback)
-                            const record = records.find(r => r.uid === selectedStudentUID || ('f-' + r.studentNo + '-' + r.name) === selectedStudentUID);
+                            const record = records.find(r => {
+                                const no = r.studentNo || r.no || '';
+                                let uniqueId = r.uid || `f-${no}-${r.name}`;
+                                if (r.uid && no && !String(r.uid).endsWith(`_${no}`)) {
+                                    uniqueId = `${r.uid}_${no}`;
+                                }
+                                return uniqueId === selectedStudentUID || r.uid === selectedStudentUID || ('f-' + r.studentNo + '-' + r.name) === selectedStudentUID;
+                            });
                             if (record && record.chosenAnswers) {
                                 answersToDisplay = record.chosenAnswers.map((ans, idx) => {
                                     if (ans === '-') return '⬜ ไม่ได้ตอบ';

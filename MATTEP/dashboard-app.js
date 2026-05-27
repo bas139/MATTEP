@@ -124,12 +124,17 @@ async function updateDashboard() {
 
     // 1. ประมวลผลคนที่สอบเสร็จแล้วก่อน (สถานะสุดท้าย)
     finishedData.forEach(item => {
-        const uid = item.uid || ('f-' + item.studentNo + '-' + item.name); // fallback สำหรับข้อมูลเก่า
-        studentMap.set(uid, {
+        const no = item.studentNo || item.no || '';
+        let uniqueId = item.uid || ('f-' + no + '-' + item.name); // fallback สำหรับข้อมูลเก่า
+        if (item.uid && no && !String(item.uid).endsWith(`_${no}`)) {
+            uniqueId = `${item.uid}_${no}`;
+        }
+        
+        studentMap.set(uniqueId, {
             ...item,
-            uid: uid,
+            uid: uniqueId,
             status: 'finished',
-            no: item.studentNo,
+            no: no,
             risk: getScoreValue(item),
             sortTime: item.submitTimestamp || 0
         });
@@ -137,18 +142,24 @@ async function updateDashboard() {
 
     // 2. ประมวลผลคนที่กำลังสอบ (Live) โดยจะเพิ่มเข้าไปก็ต่อเมื่อยังไม่มีใน Map (ยังไม่สอบเสร็จ)
     liveStudents.forEach(item => {
-        if (!studentMap.has(item.uid)) {
-            studentMap.set(item.uid, {
+        const no = item.studentNo || item.no || '';
+        let uniqueId = item.uid || (`live-${no}-${item.name}`);
+        if (item.uid && no && !String(item.uid).endsWith(`_${no}`)) {
+            uniqueId = `${item.uid}_${no}`;
+        }
+
+        if (!studentMap.has(uniqueId)) {
+            studentMap.set(uniqueId, {
                 ...item,
-                uid: item.uid,
+                uid: uniqueId,
                 status: 'live',
-                no: item.no,
+                no: no,
                 risk: getScoreValue(item),
                 sortTime: item.lastUpdate || Date.now()
             });
         }
         // ตรวจสอบพฤติกรรมใหม่เพื่อแสดง Toast
-        checkNewViolations(item);
+        checkNewViolations({ ...item, uid: uniqueId });
     });
 
     const allStudents = Array.from(studentMap.values());

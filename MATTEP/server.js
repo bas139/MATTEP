@@ -186,6 +186,11 @@ setInterval(() => {
 app.post('/api/live-sync', (req, res) => {
   const data = req.body;
   if (data && data.uid) {
+    // แยก UID สำหรับกรณีนักเรียนชื่อซ้ำกันโดยใช้เลขที่มาต่อท้าย
+    const no = data.no || data.studentNo || '';
+    if (no && !String(data.uid).endsWith(`_${no}`)) {
+      data.uid = `${data.uid}_${no}`;
+    }
     data.lastUpdate = Date.now();
     liveStudents.set(data.uid, data);
   }
@@ -211,6 +216,12 @@ app.post('/api/submit-exam', async (req, res) => {
   if (expectedHash !== record.integrity) {
     console.warn(`[🚨 ALERT] ตรวจพบการดัดแปลงข้อมูลจากผู้สอบ: ${record.name}`);
     return res.status(403).json({ error: 'การตรวจสอบความปลอดภัยล้มเหลว (Data Tampering Detected)' });
+  }
+
+  // แยก UID สำหรับคนชื่อซ้ำกันเพื่อไม่ให้ไฟล์บันทึกทับกัน
+  const no = record.studentNo || record.no || '';
+  if (no && !String(record.uid).endsWith(`_${no}`)) {
+    record.uid = `${record.uid}_${no}`;
   }
 
   try {
