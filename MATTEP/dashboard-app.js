@@ -26,8 +26,9 @@ async function fetchExamConfig() {
             ANSWER_KEY = data.map(q => q.correct);
             return; // สำเร็จ ให้ออกเลย
         }
-    } catch (e) { console.error("Failed to load exam API", e); }
-
+    } catch (e) { 
+        console.warn("API Error: ไม่สามารถโหลดข้อมูลข้อสอบได้ (เซิร์ฟเวอร์อาจยังไม่เปิด) กำลังใช้ข้อมูลสำรองแทน...", e.message);
+    }
     // กรณีเซิร์ฟเวอร์ล่ม (Fallback) ให้ใช้ข้อมูลสำรองแทน
     const backupData = [
         { text: "ภาษา HTML ใช้ทำอะไร?", correct: "B" },
@@ -100,8 +101,13 @@ async function updateDashboard() {
             const data = await res.json();
             liveStudents = data.live || [];
             finishedData = data.finished || [];
+            if (window.offlineWarningShown) window.offlineWarningShown = false; // รีเซ็ตสถานะเมื่อเชื่อมต่อสำเร็จ
         }
     } catch (e) {
+        if (!window.offlineWarningShown) {
+            console.warn("API Error: ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์แดชบอร์ดได้ กำลังทำงานในโหมดออฟไลน์");
+            window.offlineWarningShown = true;
+        }
         // หากเชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ให้ใช้ข้อมูลสำรองในเครื่อง (Offline Mode)
         for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
