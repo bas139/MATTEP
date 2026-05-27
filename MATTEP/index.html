@@ -1699,15 +1699,11 @@
       setInterval(function() {
         const start = Date.now();
         debugger;
-        if (Date.now() - start > 300) forceKick();
-      }, 1000);
+        if (Date.now() - start > 800) forceKick(); // ปรับเวลาเป็น 800ms เพื่อป้องกันคอมพิวเตอร์ประมวลผล AI กระตุกชั่วคราว
+      }, 1500);
 
-      // 2. ตรวจจับจากขนาดพื้นที่หน้าต่าง (กรณีเปิด DevTools แบบ Dock ฝังในหน้าจอ)
-      setInterval(function() {
-        if (window.outerWidth - window.innerWidth > 250 || window.outerHeight - window.innerHeight > 250) {
-          forceKick();
-        }
-      }, 1000);
+      // 2. ปิดการตรวจจับจากขนาดพื้นที่หน้าต่าง (Dimension Check)
+      // เพื่อป้องกันบั๊ก (False Positive) เวลาผู้สอบซูมหน้าจอ (Zoom-in) หรือมีแถบเครื่องมือของเบราว์เซอร์
     })();
 
     // ป้องกันการกดปุ่ม F12 และคีย์ลัด DevTools แบบสมบูรณ์

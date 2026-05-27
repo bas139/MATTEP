@@ -1,4 +1,6 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
+// 1. เพิ่มการนำเข้า BrowserRouter, Routes, Route, และ Navigate สำหรับจัดการเส้นทาง
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import * as cocoSsd from '@tensorflow-models/coco-ssd';
 import '@tensorflow/tfjs';
 import './App.css';
@@ -29,7 +31,8 @@ function headLabel(dir) {
   return map[dir] || dir;
 }
 
-export default function App() {
+// 2. เปลี่ยนชื่อ Component หลักเดิมเป็น ProctorApp สำหรับเรียกใช้ใน Router
+function ProctorApp() {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const rafRef = useRef(null);
@@ -174,7 +177,7 @@ export default function App() {
       if (faceMeshRef.current && !faceMeshBusyRef.current && typeof faceMeshRef.current.send === 'function') {
         faceMeshBusyRef.current = true;
         faceMeshRef.current.send({ image: video }) // ส่งภาพให้ FaceMesh ประมวลผล
-          .catch(err => console.error('FaceMesh error:', err?.message || 'Unknown error')) // เปลี่ยนเป็น console.error
+          .catch(err => console.error('FaceMesh error:', err?.message || 'Unknown error')) 
           .finally(() => { faceMeshBusyRef.current = false; });
       }
       
@@ -182,7 +185,7 @@ export default function App() {
       if (fc % FRAME_SKIP_FACE_DETECTION === 0 && faceDetectionRef.current && !faceDetectBusyRef.current && typeof faceDetectionRef.current.send === 'function') {
         faceDetectBusyRef.current = true;
         faceDetectionRef.current.send({ image: video }) // ส่งภาพให้ FaceDetection ประมวลผล
-          .catch(err => console.error('FaceDetection error:', err?.message || 'Unknown error')) // เปลี่ยนเป็น console.error
+          .catch(err => console.error('FaceDetection error:', err?.message || 'Unknown error')) 
           .finally(() => { faceDetectBusyRef.current = false; });
       }
       
@@ -201,7 +204,7 @@ export default function App() {
               addAlert('ตรวจพบวัตถุต้องสงสัย: ' + names, 'object', 'danger');
             }
           })
-          .catch(err => console.error('COCO-SSD error:', err?.message || 'Unknown error')) // เปลี่ยนเป็น console.error
+          .catch(err => console.error('COCO-SSD error:', err?.message || 'Unknown error')) 
           .finally(() => { cocoBusyRef.current = false; });
       }
       rafRef.current = requestAnimationFrame(runLoop);
@@ -515,5 +518,21 @@ export default function App() {
         </div>
       </div>
     </div>
+  );
+}
+
+// 3. ทำการ Export คอมโพเนนต์หลักที่ถูกควบคุมด้วย BrowserRouter
+// เมื่อเรียกใช้ `/` จะทำการบังคับย้ายไปหน้า `/home` อัตโนมัติด้วยคำสั่ง <Navigate />
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        {/* บังคับเมื่อวิ่งเข้าหน้าหลักของเว็บให้ Redirect ไปหน้า /home ทันที */}
+        <Route path="/" element={<Navigate to="/home" replace />} />
+        
+        {/* หน้าหลักของแอปพลิเคชันกำหนดให้อยู่บนเส้นทาง /home */}
+        <Route path="/home" element={<ProctorApp />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
